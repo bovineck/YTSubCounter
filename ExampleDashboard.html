@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>OneCircuit v6.7.2 Master Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body{font-family:'Segoe UI',sans-serif; background:#1e293b; color:#f1f5f9; padding:15px; max-width:600px; margin:auto;} 
+        .page { display: none; }
+        .active-page { display: block; }
+        .box{background:#334155; padding:18px; border-radius:12px; margin-bottom:20px; border-left:6px solid #38bdf8; 
+             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4), 0 4px 6px -2px rgba(0,0,0,0.2); box-sizing:border-box;} 
+        .faq-box{background:#334155; padding:18px; border-radius:12px; margin-bottom:15px; border-left:6px solid #fbbf24; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4);} 
+        input{display:block; width:100%; padding:14px; margin:10px 0; border-radius:8px; border:1px solid #475569; background:#1e293b; color:#fff; box-sizing: border-box;} 
+        input:focus{outline:none; border-color:#38bdf8; box-shadow:0 0 0 2px rgba(56,189,248,0.2);} 
+        .btn{padding:14px; border-radius:8px; color:#fff; cursor:pointer; text-decoration:none; display:inline-block; font-weight:bold; margin-top:10px; text-align:center; border:none; transition:0.2s;} 
+        .btn:active{transform:scale(0.98);} .save{background:#10b981; width:100%; font-size:1.1em; margin-bottom:10px; box-shadow:0 4px 6px rgba(0,0,0,0.2);} 
+        .hbtn{background:#f59e0b; flex:1; margin:5px;} .pbtn{background:#64748b; flex:1; margin:5px;} .reboot{background:#ef4444; flex:1; margin:5px;} 
+        .pass-toggle{background:#475569; font-size:0.8em; padding:8px 12px; margin-bottom:15px; width:auto;} 
+        .footer-nav{display:flex; flex-wrap:wrap; gap:10px; margin-top:25px; border-top:1px solid #475569; padding-top:15px;} 
+        .footer-nav .btn{flex:1 1 140px; margin:0;} 
+        a{color:#38bdf8; text-decoration:none;} table{width:100%; border-collapse: collapse; background:#334155; border-radius:8px; overflow:hidden;} 
+        th, td{padding:12px; border-bottom:1px solid #475569; text-align:left;} th{background:#1e293b; color:#38bdf8;} .active{background:#0c4a6e; font-weight:bold;}
+    </style>
+    <script>
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
+            document.getElementById(pageId).classList.add('active-page');
+            window.scrollTo(0,0);
+        }
+        function togPass(){var p=document.getElementById('p'); p.type=(p.type==='password')?'text':'password';}
+    </script>
+</head>
+<body>
+
+    <div id="page-root" class="page active-page">
+        <h1>OneCircuit YT Subs</h1>
+        <div class='box'><small>A Universal YouTube Subscriber Tracker for ESP32. Featuring auto-hardware detection, OTA updates, and a mobile-friendly dashboard.</small>
+            <div style='margin-top:12px; border-top:1px solid #475569; padding-top:10px;'>
+                <div style='font-size:0.8em; color:#94a3b8; margin-bottom:8px;'>Links:</div>
+                <div style='display:flex; flex-wrap:wrap; gap:10px;'>
+                    <a href='https://www.youtube.com/@onecircuit-as' target='_blank'>[ YouTube ]</a>
+                    <a href='https://onecircuit.blogspot.com/' target='_blank'>[ Blog ]</a>
+                    <a href='https://github.com/bovineck/' target='_blank'>[ GitHub ]</a>
+                </div>
+            </div>
+        </div>
+        
+        <form onsubmit="showPage('page-receipt'); return false;">
+            <h3>Identity</h3>
+            <input value='OneCircuit'>
+            <input value='Tasmania, AU'>
+            <h3>Network</h3>
+            <input value='Workshop_WiFi'>
+            <input type='password' id='p' value='password123'>
+            <button type='button' class='btn pass-toggle' onclick='togPass()'>Show/Hide Password</button>
+            <h3>YouTube API</h3>
+            <input value='AIzaSyA...'>
+            <input value='UC...'>
+            <h3>Schedule</h3>
+            Sleep (0-23): <input type='number' value='23'>
+            Wake (0-23): <input type='number' value='7'>
+            <h3>Settings</h3>
+            Scroll Cycle (Mins): <input type='number' value='10'>
+            <input type='submit' value='Save & Preview Receipt' class='btn save'>
+        </form>
+
+        <div class='footer-nav'>
+            <button class='btn hbtn' onclick="showPage('page-help')">Help</button>
+            <button class='btn pbtn' onclick="showPage('page-pins')">Pin Wiring</button>
+            <button class='btn pbtn' style='background:#6366f1;' onclick="showPage('page-update')">Update Firmware</button>
+        </div>
+        <button class='btn reboot' style='width:100%;' onclick="if(confirm('Reboot the device now?')) showPage('page-root')">System Reboot</button>
+    </div>
+
+    <div id="page-help" class="page">
+        <h1>User Guide</h1>
+        
+        <div class='faq-box'><h2>OTA Update Information</h2>
+            <b>1. Partition Scheme:</b> In Arduino IDE, please select: <br><i>Tools -> Partition Scheme -> Minimal SPIFFS. e.g. 1.9MB APP with OTA</i>.<br><br>
+            Ref: <a href='https://docs.espressif.com/projects/arduino-esp32/en/latest/tutorials/partition_table.html' target='_blank'>Espressif Partition Guide</a>.<br><br>
+            If "Minimal SPIFFS" is missing for your board, add a custom <b>ota_19mb.csv</b> and update <b>boards.txt</b>. This allocates 1.9MB for the App, ensuring OTA updates work with large modern binaries. <br><br>
+            <b>2. The right file:</b> Upload <b>YourVersion.ino.bin</b>. <span style='color:#ef4444;'><br><br>⚠️ DO NOT upload 'YourVersion.merged.bin' or 'YourVersion.bootloader.bin'</span> <br><br>... they will be too large for OTA and will likely cause an 'UPDATE FAIL' message.
+        </div>
+
+        <div class='faq-box'><h2>YouTube API Key</h2>Enable 'YouTube Data API v3' at the <a href='https://console.cloud.google.com/' target='_blank'>Google Cloud Console</a>. Make sure your key has no IP restrictions that might block the ESP32.</div>
+
+        <div class='faq-box'><h2>Channel ID</h2>Your ID starts with 'UC...'. You can find it in your <a href='https://www.youtube.com/account_advanced' target='_blank'>YouTube Advanced Settings</a> or by clicking your profile icon > Settings > Advanced.</div>
+
+        <div class='faq-box'><h2>Scroll Cycle</h2>The number of minutes between info scrolls. The display will show the Subscriber count primarily, then cycle through Location and Local Time based on this setting.</div>
+
+        <div class='faq-box'><h2>Sleep & Wake Hr</h2>Uses 24-hour format (0-23). To extend the life of your 32x8 LED matrices (and save power!), the display will turn off during the Sleep Hour and resume at the Wake Hour.</div>
+
+        <div class='faq-box'><h2>AP Mode</h2>If the device cannot connect to your Wi-Fi, it creates its own hotspot: 'OneCircuit-Config'. <br>Connect with your phone and browse to 192.168.4.1 to update settings.</div>
+
+        <button class='btn hbtn' style="width:100%" onclick="showPage('page-root')">&larr; Back to Dashboard</button>
+    </div>
+
+    <div id="page-pins" class="page">
+        <h1>Wiring Map</h1>
+        <div class='box'>Detected: <b>ESP32 C6</b></div>
+        <table>
+            <tr><th>Model</th><th>CS</th><th>MOSI</th><th>CLK</th></tr>
+            <tr class="active"><td>Seeed XIAO C6</td><td>1</td><td>21</td><td>19</td></tr>
+            <tr><td>Seeed XIAO C3</td><td>3</td><td>10</td><td>8</td></tr>
+            <tr><td>Seeed XIAO S3</td><td>1</td><td>9</td><td>7</td></tr>
+            <tr><td>ESP32-C3 SuperMini</td><td>7</td><td>6</td><td>4</td></tr>
+            <tr><td>Seeed XIAO ESP32</td><td>5</td><td>23</td><td>18</td></tr>
+            <tr><td>Adafruit Feather</td><td>33</td><td>18</td><td>5</td></tr>
+            <tr><td>ESP32-S2 DevKit</td><td>15</td><td>35</td><td>36</td></tr>
+            <tr><td>ESP32-S3 DevKit</td><td>10</td><td>11</td><td>12</td></tr>
+            <tr><td>DevKit V1 (Standard)</td><td>5</td><td>23</td><td>18</td></tr>
+            <tr><td>Generic ESP32</td><td>5</td><td>23</td><td>18</td></tr>
+        </table>
+        <p>Official docs: <a href='https://docs.espressif.com/projects/esp-idf/en/latest/esp32/hw-reference/index.html' target='_blank'>Espressif Hardware Reference</a>.</p>
+        <button class='btn pbtn' onclick="showPage('page-root')">&larr; Back</button>
+    </div>
+
+    <div id="page-receipt" class="page">
+        <div class='box' style='background:#f8fafc; color:#1e293b; border-left-color:#10b981;'>
+            <h1>Config Receipt</h1><p>Verify details before rebooting.</p>
+            <div style='border-bottom:1px solid #e2e8f0; padding:10px 0;'><b>Channel Name:</b> OneCircuit</div>
+            <div style='border-bottom:1px solid #e2e8f0; padding:10px 0;'><b>Channel ID:</b> UC123...</div>
+            <div style='border-bottom:1px solid #e2e8f0; padding:10px 0;'><b>Wi-Fi SSID:</b> Workshop_WiFi</div>
+            
+            <div style='display:flex; flex-direction:column; gap:10px; margin-top:15px;'>
+                <button class='btn pbtn' onclick='window.print()'>1. Print / Save PDF</button>
+                <button class='btn reboot' onclick="showPage('page-root')">2. Commit & Reboot</button>
+                <button class='btn hbtn' style="background:#475569;" onclick="showPage('page-root')">&larr; Return</button>
+            </div>
+        </div>
+
+        <div class='box' style='background:#0f172a; border-left-color:#38bdf8; font-family:monospace; font-size:0.85em;'>
+            <h3 style='color:#38bdf8; margin-top:0;'>System Health</h3>
+            Free RAM: 298 KB<br>
+            Binary Size: 1203 KB / 1920 KB
+        </div>
+
+        <div class='box' style='border-left-color: #ef4444; background:#1e293b;'>
+            <h2 style="margin-top:0; color:#ef4444;">Danger Zone</h2>
+            <p style='font-size: 0.8em; color: #94a3b8;'>Wipe all WiFi credentials and API keys from NVS storage.</p>
+            <button class='btn reboot' style='width:100%;' onclick="if(confirm('Are you sure? This will delete all saved data!')) showPage('page-root')">Factory Reset Device</button>
+        </div>
+    </div>
+
+    <div id="page-update" class="page">
+        <h1>Firmware Update</h1>
+        <div class='box' style='border-left-color: #ef4444;'>
+            <h3>Select .bin File</h3>
+            <input type='file' accept='.bin'>
+            <button class='btn reboot' style='width:100%;' onclick="alert('Uploading...')">Begin Update</button>
+        </div>
+        <button class='btn pbtn' style="width:100%" onclick="showPage('page-root')">&larr; Cancel</button>
+    </div>
+
+</body>
+</html>
