@@ -1,6 +1,6 @@
 /*
  PROJECT: OneCircuit YouTube Subscriber Tracker
- AUTHOR:  OneCircuit and Gemini AI Thu 05 Mar 2026 13:16:40 AEDT
+ AUTHOR:  OneCircuit and Gemini AI Sat 07 Mar 2026 12:39:22 AEDT
 
 https://www.youtube.com/@onecircuit-as
 https://onecircuit.blogspot.com/
@@ -77,7 +77,7 @@ const char* PROJECT_DESC = "A Universal YouTube Subscriber Tracker for ESP32. Fe
 
 // [SECTION 3] - Auto-Hardware Detection
 #if defined(ARDUINO_SEEED_XIAO_ESP32C6) || defined(ARDUINO_XIAO_ESP32C6) || defined(ESP32C6)
-#define CS_PIN 1
+#define CS_PIN 2
 #define MOSI_PIN 21
 #define CLK_PIN 19
 const char* HW_NAME = "ESP32 C6";
@@ -137,15 +137,15 @@ Preferences prefs;
 DNSServer dnsServer;
 
 String apiKey, channelId, channelName, location;
-uint8_t sleepHour, wakeHour, subTrigger;
+uint8_t sleepHour, wakeHour;
 bool isAPMode = false, isBlinking = false;
 long currentSubs = 0;
-uint8_t subsDisplayCount = 0;
 uint32_t lastUpdate = 0, lastBlink = 0;
-char message[100] = "Connecting...";
+char displayMsg[48] = "READY";  // keep small so the display doesn't choke up
 String lastTimeCheck = "Never";
 unsigned long wifiTimeout = 0;
-bool wifiStatusReported = false;
+uint8_t curTR = 10;
+uint8_t scrollState = 0;
 
 void handleRoot();
 void handleSave();
@@ -167,7 +167,7 @@ String getCSS() {
   css += ".hbtn{background:#f59e0b; flex:1; margin:5px;} .pbtn{background:#64748b; flex:1; margin:5px;} .reboot{background:#ef4444; flex:1; margin:5px;} ";
   css += ".pass-toggle{background:#475569; font-size:0.8em; padding:8px 12px; margin-bottom:15px; width:auto;} ";
   css += ".footer-nav{display:flex; flex-wrap:wrap; gap:10px; margin-top:25px; border-top:1px solid #475569; padding-top:15px;} ";
-  css += ".footer-nav .btn{flex:1 1 140px; margin:0;} ";  // This makes them wrap and grow
+  css += ".footer-nav .btn{flex:1 1 140px; margin:0;} ";
   css += "a{color:#38bdf8; text-decoration:none;} table{width:100%; border-collapse: collapse; background:#334155; border-radius:8px; overflow:hidden;} ";
   css += "th, td{padding:12px; border-bottom:1px solid #475569; text-align:left;} th{background:#1e293b; color:#38bdf8;} .active{background:#0c4a6e; font-weight:bold;}</style>";
   return css;
@@ -184,7 +184,7 @@ void handleRoot() {
   String curCI = prefs.getString("cid", "");
   int curSL = prefs.getUChar("sleep", 23);
   int curWA = prefs.getUChar("wake", 7);
-  int curTR = prefs.getUChar("trigger", 10);
+  curTR = prefs.getUChar("trigger", 10);
   prefs.end();
 
   String html = "<html><head><title>Dashboard</title><meta name='viewport' content='width=device-width, initial-scale=1'>" + getCSS();
@@ -285,6 +285,8 @@ void handleSave() {
   prefs.putUChar("sleep", (uint8_t)s_sl.toInt());
   prefs.putUChar("wake", (uint8_t)s_wa.toInt());
   prefs.putUChar("trigger", (uint8_t)s_tr.toInt());
+  curTR = (uint8_t)s_tr.toInt();
+  lastUpdate = millis();
   prefs.end();
 
   // 2. Build the HTML String
@@ -313,7 +315,7 @@ void handleSave() {
   html += "<a href='/' class='btn hbtn'>&larr; Return to Edit</a>";
   html += "</div></div>";
 
-  // 3. System Health Check (The new tech stats)
+  // 3. System Health Check
   uint32_t freeHeap = ESP.getFreeHeap();
   uint32_t sketchSize = ESP.getSketchSize();
 
@@ -402,70 +404,49 @@ void sendTransitionPage(String title, String msg, int duration) {
 
 // [SECTION 8] - YouTube API Engine
 void updateYouTubeData() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("YouTube Sync Skipped: No WiFi");
-    return;
-  }
-  if (apiKey == "") {
-    Serial.println("YouTube Sync Skipped: Missing API Key");
-    return;
-  }
+  Serial.println("\n>>> [SYNC START]");
+  if (WiFi.status() != WL_CONNECTED) return;
 
   HTTPClient http;
+  http.setTimeout(3000);
+
   String url = "https://www.googleapis.com/youtube/v3/channels?part=statistics&id=" + channelId + "&key=" + apiKey;
   http.begin(url);
-
   int httpCode = http.GET();
+
   if (httpCode == 200) {
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<1536> doc;
     deserializeJson(doc, http.getString());
     const char* subString = doc["items"][0]["statistics"]["subscriberCount"];
 
     if (subString) {
       currentSubs = atol(subString);
-      subsDisplayCount++;
-      Serial.printf("YouTube Sync Success: %ld subs\n", currentSubs);
 
       struct tm timeinfo;
       if (getLocalTime(&timeinfo)) {
         char timeStringBuff[50];
         strftime(timeStringBuff, sizeof(timeStringBuff), "%H:%M (%d %b)", &timeinfo);
         lastTimeCheck = String(timeStringBuff);
-
-        if (timeinfo.tm_hour == sleepHour) {
-          myDisplay.displayShutdown(true);
-          http.end();
-          return;
-        } else {
-          myDisplay.displayShutdown(false);
-        }
       }
-
-      // Clean Scroll 
-      if (subsDisplayCount >= subTrigger && subTrigger > 0) {
-        char scrollMsg[120];
-        snprintf(scrollMsg, sizeof(scrollMsg), "%s: %s %s", channelName.c_str(), location.c_str(), lastTimeCheck.c_str());
-        myDisplay.displayText(scrollMsg, PA_LEFT, 50, 0, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
-        subsDisplayCount = 0; 
-      } else {
-        snprintf(message, sizeof(message), "%s: %ld", channelName.c_str(), currentSubs);
-        myDisplay.displayText(message, PA_LEFT, 60, 2000, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
-      }
+      Serial.println(">>> DATA FETCHED SUCCESSFULLY.");
     }
   } else {
-    Serial.printf("YouTube API Error: %d\n", httpCode);
+    Serial.printf(">>> API ERROR: %d\n", httpCode);
   }
-  http.end();
-}
 
+  http.end();
+  delay(100);
+  Serial.println(">>> [SYNC COMPLETE]");
+}
 
 // [SECTION 9] - System Setup
 void setup() {
   // 1. Start Serial Debugging
   Serial.begin(115200);
-  delay(1000); 
-  Serial.println("\n--- OneCircuit YT Tracker v6.7.2 Master ---");
-  Serial.print("Hardware Detected: "); Serial.println(HW_NAME);
+  delay(1000);
+  Serial.println("\n--- DIAGNOSTIC BOOT ---");
+  Serial.print("Hardware Detected: ");
+  Serial.println(HW_NAME);
 
   // 2. Load Configuration from Flash
   prefs.begin("config", false);
@@ -475,29 +456,37 @@ void setup() {
   channelId = prefs.getString("cid", "");
   sleepHour = prefs.getUChar("sleep", 23);
   wakeHour = prefs.getUChar("wake", 7);
-  subTrigger = prefs.getUChar("trigger", 10);
+  curTR = prefs.getUChar("trigger", 10);  // Load the saved value on boot
   String cSSID = prefs.getString("ssid", INITIAL_SSID);
   String cPASS = prefs.getString("pass", INITIAL_PASS);
   prefs.end();
 
+
+
   // 3. Initialize Hardware Display
+  pinMode(CS_PIN, OUTPUT);
+  digitalWrite(CS_PIN, HIGH);  // Ensure the display is "Deselected" to start
+
   SPI.begin(CLK_PIN, -1, MOSI_PIN, CS_PIN);
+  SPI.setFrequency(200000);  // slow SPI for stability
   myDisplay.begin();
-  myDisplay.setIntensity(3);
+  myDisplay.setIntensity(2);
   myDisplay.displayClear();
-  myDisplay.print("WAIT"); // Shows on the matrix during boot
+  myDisplay.print("READY");
+  Serial.println("Display Initialized.");
 
   // 4. Robust WiFi Handshake
-  WiFi.persistent(false); 
-  WiFi.disconnect(true);  
+  WiFi.persistent(false);
+  WiFi.disconnect(true);
   delay(200);
   WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true); 
-  
-  // Disable WiFi sleep to prevent the router from dropping the ESP32
-  WiFi.setSleep(WIFI_PS_NONE); 
+  WiFi.setAutoReconnect(true);
 
-  Serial.print("Connecting to WiFi: "); Serial.println(cSSID);
+  // Disable WiFi sleep to prevent the router from dropping the ESP32
+  WiFi.setSleep(WIFI_PS_NONE);
+
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(cSSID);
   WiFi.begin(cSSID.c_str(), cPASS.c_str());
 
   // Wait 15 seconds for connection with visual feedback
@@ -511,8 +500,9 @@ void setup() {
   // 5. Post-Connection Logic
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\nCONNECTED!");
-    Serial.print("IP: "); Serial.println(WiFi.localIP());
-    
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+
     // Start mDNS: http://onecircuit.local
     if (MDNS.begin("onecircuit")) {
       Serial.println("mDNS responder started.");
@@ -543,24 +533,24 @@ void setup() {
   server.on("/help", handleHelp);
   server.on("/pins", handlePins);
 
-  server.on("/refresh", []() { 
-    updateYouTubeData(); 
-    server.sendHeader("Location", "/"); 
-    server.send(303); 
+  server.on("/refresh", []() {
+    updateYouTubeData();
+    server.sendHeader("Location", "/");
+    server.send(303);
   });
 
   server.on("/wipe_exec", []() {
     prefs.begin("config", false);
-    prefs.clear(); 
+    prefs.clear();
     prefs.end();
     sendTransitionPage("Factory Reset", "Wiping NVS and restarting...", 20);
-    delay(1000); 
+    delay(1000);
     ESP.restart();
   });
 
   server.on("/reboot_exec", []() {
     sendTransitionPage("System Reboot", "Restarting device...", 20);
-    delay(1000); 
+    delay(1000);
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     delay(2500);
@@ -569,7 +559,8 @@ void setup() {
 
   server.on("/update", handleUpdate);
 
-  server.on("/update_exec", HTTP_POST, []() {
+  server.on(
+    "/update_exec", HTTP_POST, []() {
       if (Update.hasError()) {
         server.send(200, "text/html", "Update Failed. Check Serial Monitor.");
       } else {
@@ -577,10 +568,11 @@ void setup() {
         delay(2000);
         ESP.restart();
       }
-    }, []() {
+    },
+    []() {
       HTTPUpload& upload = server.upload();
       if (upload.status == UPLOAD_FILE_START) {
-        myDisplay.displayShutdown(true); // Turn off LEDs during flash
+        myDisplay.displayShutdown(true);  // Turn off LEDs during flash
         if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
       } else if (upload.status == UPLOAD_FILE_WRITE) {
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) Update.printError(Serial);
@@ -592,21 +584,71 @@ void setup() {
 
   server.begin();
   Serial.println("HTTP Server Started.");
+  Serial.println("Setup Finished.");
 }
 
-// [SECTION 10] - Execution Loop
+// [SECTION 10] - Execution Loop (v9.0 "Lean Buffer" Edition)
 void loop() {
+  yield();
   server.handleClient();
-  if (isAPMode) dnsServer.processNextRequest();
-  else {
-    if (myDisplay.displayAnimate()) myDisplay.displayReset();
+
+  if (isAPMode) {
+    dnsServer.processNextRequest();
+  } else {
+    bool isFinished = myDisplay.displayAnimate();
+
+    if (isFinished) {
+      // 1. Take a breath
+      myDisplay.displayShutdown(true);
+      delay(100);
+
+      unsigned long updateIntervalMs = (unsigned long)curTR * 60000UL;
+
+      if (millis() - lastUpdate > updateIntervalMs) {
+        if (scrollState == 0) {
+          updateYouTubeData();
+          scrollState = 1;
+        }
+
+        switch (scrollState) {
+          case 1:
+            snprintf(displayMsg, sizeof(displayMsg), "CH: %s", channelName.c_str());
+            scrollState = 2;
+            break;
+          case 2:
+            snprintf(displayMsg, sizeof(displayMsg), "LOC: %s", location.c_str());
+            scrollState = 3;
+            break;
+          case 3:
+            snprintf(displayMsg, sizeof(displayMsg), "SYNC: %s", lastTimeCheck.c_str());
+            scrollState = 4;
+            break;
+          case 4:
+            lastUpdate = millis();
+            scrollState = 0;
+            snprintf(displayMsg, sizeof(displayMsg), "%s: %ld", channelName.c_str(), currentSubs);
+            break;
+        }
+      } else {
+        // Normal Mode: Refresh the sub count in the buffer
+        snprintf(displayMsg, sizeof(displayMsg), "%s: %ld", channelName.c_str(), currentSubs);
+      }
+
+      // 3. Hardware Pulse
+      myDisplay.displayClear();
+      myDisplay.displayShutdown(false);
+      myDisplay.setIntensity(2);
+
+      // Point the library to the SINGLE global buffer
+      myDisplay.displayText(displayMsg, PA_LEFT, 100, 2000, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
+      myDisplay.displayReset();
+
+      delay(5);  // Tiny settle
+    }
+
     if (millis() - lastBlink > (isBlinking ? 150 : 3500)) {
       isBlinking = !isBlinking;
       lastBlink = millis();
-    }
-    if (millis() - lastUpdate > 60000) {
-      updateYouTubeData();
-      lastUpdate = millis();
     }
   }
 }
