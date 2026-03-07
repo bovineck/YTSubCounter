@@ -511,7 +511,8 @@ void setup() {
     // Scroll IP Address across the matrix once
     String ipAddr = WiFi.localIP().toString();
     myDisplay.displayClear();
-    myDisplay.displayText(ipAddr.c_str(), PA_LEFT, 60, 2000, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
+    // IN: Scroll Left | OUT: Scroll Up
+    myDisplay.displayText(ipAddr.c_str(), PA_CENTER, 80, 2000, PA_SCROLL_LEFT, PA_SCROLL_UP);
     while (!myDisplay.displayAnimate()) { yield(); }
 
     // Sync Time for Sleep/Wake Schedule
@@ -587,65 +588,62 @@ void setup() {
   Serial.println("Setup Finished.");
 }
 
-// [SECTION 10] - Execution Loop (v9.0 "Lean Buffer" Edition)
+// [SECTION 10] - Execution Loop (v12.5 "The Interceptor")
 void loop() {
-  yield();
+  // 1. GLOBAL PRIORITY: Always check the server first
   server.handleClient();
+  yield(); 
 
   if (isAPMode) {
     dnsServer.processNextRequest();
   } else {
+    // 2. CHECK THE ANIMATION
+    // We check this every single loop iteration, even if it's not finished
     bool isFinished = myDisplay.displayAnimate();
 
     if (isFinished) {
-      // 1. Take a breath
-      myDisplay.displayShutdown(true);
-      delay(100);
+      // 3. MANDATORY BREATHER
+      // We check the server again right here in case a request came in 
+      // during the millisecond the display was "between" states.
+      server.handleClient();
+      
+      myDisplay.displayShutdown(true); 
+      delay(50); // Reduced delay to keep loop snappy
 
-      unsigned long updateIntervalMs = (unsigned long)curTR * 60000UL;
+      // --- LOGIC: SEQUENCE vs NORMAL ---
+      bool inSequence = (scrollState > 0 || (millis() - lastUpdate > (curTR * 60000UL)));
 
-      if (millis() - lastUpdate > updateIntervalMs) {
-        if (scrollState == 0) {
-          updateYouTubeData();
-          scrollState = 1;
+      if (inSequence) {
+        if (scrollState == 0) { 
+          updateYouTubeData(); 
+          scrollState = 1; 
         }
 
         switch (scrollState) {
-          case 1:
-            snprintf(displayMsg, sizeof(displayMsg), "CH: %s", channelName.c_str());
-            scrollState = 2;
-            break;
-          case 2:
-            snprintf(displayMsg, sizeof(displayMsg), "LOC: %s", location.c_str());
-            scrollState = 3;
-            break;
-          case 3:
-            snprintf(displayMsg, sizeof(displayMsg), "SYNC: %s", lastTimeCheck.c_str());
-            scrollState = 4;
-            break;
-          case 4:
-            lastUpdate = millis();
-            scrollState = 0;
-            snprintf(displayMsg, sizeof(displayMsg), "%s: %ld", channelName.c_str(), currentSubs);
-            break;
+          case 1: snprintf(displayMsg, 48, "CH: %s", channelName.c_str()); scrollState = 2; break;
+          case 2: snprintf(displayMsg, 48, "LOC: %s", location.c_str()); scrollState = 3; break;
+          case 3: snprintf(displayMsg, 48, "SYNC: %s", lastTimeCheck.c_str()); scrollState = 4; break;
+          case 4: lastUpdate = millis(); scrollState = 0; break;
         }
+        myDisplay.displayText(displayMsg, PA_CENTER, 80, 2000, PA_SCROLL_LEFT, PA_SCROLL_UP);
       } else {
-        // Normal Mode: Refresh the sub count in the buffer
-        snprintf(displayMsg, sizeof(displayMsg), "%s: %ld", channelName.c_str(), currentSubs);
+        static bool toggleName = true; 
+        if (toggleName) {
+          snprintf(displayMsg, 48, "%s", channelName.c_str());
+          myDisplay.displayText(displayMsg, PA_CENTER, 80, 2000, PA_SCROLL_LEFT, PA_SCROLL_UP);
+        } else {
+          snprintf(displayMsg, 48, "Subs: %ld", currentSubs);
+          myDisplay.displayText(displayMsg, PA_CENTER, 80, 2000, PA_SCROLL_UP, PA_SCROLL_UP);
+        }
+        toggleName = !toggleName;
       }
 
-      // 3. Hardware Pulse
       myDisplay.displayClear();
       myDisplay.displayShutdown(false);
-      myDisplay.setIntensity(2);
-
-      // Point the library to the SINGLE global buffer
-      myDisplay.displayText(displayMsg, PA_LEFT, 100, 2000, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
       myDisplay.displayReset();
-
-      delay(5);  // Tiny settle
     }
 
+    // 4. HEARTBEAT
     if (millis() - lastBlink > (isBlinking ? 150 : 3500)) {
       isBlinking = !isBlinking;
       lastBlink = millis();
