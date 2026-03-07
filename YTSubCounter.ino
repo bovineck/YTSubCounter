@@ -77,7 +77,7 @@ const char* PROJECT_DESC = "A Universal YouTube Subscriber Tracker for ESP32. Fe
 
 // [SECTION 3] - Auto-Hardware Detection
 #if defined(ARDUINO_SEEED_XIAO_ESP32C6) || defined(ARDUINO_XIAO_ESP32C6) || defined(ESP32C6)
-#define CS_PIN 2
+#define CS_PIN 1
 #define MOSI_PIN 21
 #define CLK_PIN 19
 const char* HW_NAME = "ESP32 C6";
